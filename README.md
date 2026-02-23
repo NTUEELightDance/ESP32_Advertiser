@@ -39,6 +39,11 @@ graph TD
 * **LPS Receiver**: Syncs time upon receiving *any* single packet.
 * **Status Feedback**: Receivers respond with an ACK packet containing their current state and remaining delay when queried, allowing the PC to monitor fleet status.
 
+4. **Content Update Layer (TCP/WiFi)**
+
+* **TCP Server**: The PC runs an asynchronous TCP server (`tcp_sender.py`) to serve content files.
+* **Direct Update**: LPS Receivers connect via WiFi to download specific Control and Frame data files based on their Player ID.
+
 ## Project Structure
 
 ```text
@@ -52,6 +57,8 @@ graph TD
 ├── lps-ctrl/               # Python control package
 │   ├── examples/           # Usage examples
 │   ├── src/lps_ctrl/       # Core source code
+│   │   ├── lps_ctrl.py     # UART Control Logic
+│   │   └── tcp_sender.py   # TCP File Server Logic
 │   ├── pyproject.toml      # Configuration file
 │   └── README.md           
 ```
