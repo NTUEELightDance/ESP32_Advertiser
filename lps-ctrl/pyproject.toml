@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lps-ctrl"
+version = "0.1.0"
+description = "Light Playback System Controller for ESP32"
+readme = "README.md"
+requires-python = ">=3.8"
+
+dependencies = [
+    "pyserial>=3.5",
+]
