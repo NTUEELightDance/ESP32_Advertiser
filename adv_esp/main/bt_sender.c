@@ -63,10 +63,8 @@ static void hci_cmd_send_ble_set_adv_data(uint8_t cmd_type, uint32_t delay_ms, u
     
     raw_adv_data[idx++] = 2; raw_adv_data[idx++] = 0x01; raw_adv_data[idx++] = 0x06;
     
-    raw_adv_data[idx++] = 22; 
-    raw_adv_data[idx++] = 0xFF; 
-    raw_adv_data[idx++] = 0xFF;
-    raw_adv_data[idx++] = 0xFF;
+    raw_adv_data[idx++] = 20; 
+    raw_adv_data[idx++] = 0x16; 
     
     raw_adv_data[idx++] = 0x4C; // 'L'
     raw_adv_data[idx++] = 0x44; // 'D'
