@@ -34,6 +34,8 @@
 #ifndef HCIC_PARAM_SIZE_SET_EVENT_MASK
 #define HCIC_PARAM_SIZE_SET_EVENT_MASK         (8)
 #endif
+#define UUID1 -1 // change into real uuid
+#define UUID2 -1 // change into real uuid
 
 static const char *TAG = "BT_SENDER";
 static volatile int64_t last_measured_latency = 0;
@@ -63,13 +65,11 @@ static void hci_cmd_send_ble_set_adv_data(uint8_t cmd_type, uint32_t delay_ms, u
     
     raw_adv_data[idx++] = 2; raw_adv_data[idx++] = 0x01; raw_adv_data[idx++] = 0x06;
     
-    raw_adv_data[idx++] = 22; 
-    raw_adv_data[idx++] = 0xFF; 
-    raw_adv_data[idx++] = 0xFF;
-    raw_adv_data[idx++] = 0xFF;
+    raw_adv_data[idx++] = 20; 
+    raw_adv_data[idx++] = 0x16; 
     
-    raw_adv_data[idx++] = 0x4C; // 'L'
-    raw_adv_data[idx++] = 0x44; // 'D'
+    raw_adv_data[idx++] = UUID1; // change into real uuid
+    raw_adv_data[idx++] = UUID2; // change into real uuid
     raw_adv_data[idx++] = cmd_type;
 
     // Target Mask (8 bytes)
@@ -155,7 +155,7 @@ static int host_rcv_pkt(uint8_t *data, uint16_t len) {
             uint8_t ad_len = adv_data[offset++];
             if(ad_len == 0) break;
             uint8_t ad_type = adv_data[offset++];
-            if(ad_type == 0xFF && (adv_data[offset] == 0xFF && adv_data[offset + 1] == 0xFF) && (adv_data[offset+2] == 0x4C && adv_data[offset + 3] == 0x44)) { 
+            if(ad_type == 0xFF && (adv_data[offset] == 0xFF && adv_data[offset + 1] == 0xFF) && (adv_data[offset+2] == UUID1 && adv_data[offset + 3] == UUID2)) { 
                 if (adv_data[offset+4] == 0x07 && ad_len == 14) {
                     uint8_t target_id = adv_data[offset+5];
                     uint8_t cmd_id    = adv_data[offset+6];
