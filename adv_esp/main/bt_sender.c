@@ -16,6 +16,7 @@
 #define MAX_ACTIVE_TASKS 16
 
 /* --- HCI Command Opcodes & Groups --- */
+// Defines raw HCI (Host Controller Interface) opcodes to bypass the standard Bluetooth stack for lower latency.
 #ifndef HCI_GRP_HOST_CONT_BASEBAND_CMDS
 #define HCI_GRP_HOST_CONT_BASEBAND_CMDS (0x03 << 10)
 #endif
@@ -34,6 +35,8 @@
 #ifndef HCIC_PARAM_SIZE_SET_EVENT_MASK
 #define HCIC_PARAM_SIZE_SET_EVENT_MASK         (8)
 #endif
+#define UUID1 -1 // change into real uuid
+#define UUID2 -1 // change into real uuid
 
 static const char *TAG = "BT_SENDER";
 static volatile int64_t last_measured_latency = 0;
@@ -44,13 +47,13 @@ static bool is_checking = false;        // Flag indicating if currently in CHECK
 // Structure to store an active broadcast task
 typedef struct {
     bool active;                // Is this slot currently in use?
-    int64_t end_time_us;        // Absolute timestamp when broadcasting should stop
+    int64_t end_time_us;        // Absolute hardware timestamp when broadcasting should stop
     bt_sender_config_t config;  // The command configuration (cmd, delay, target, etc.)
 } active_task_t;
 
 static active_task_t s_tasks[MAX_ACTIVE_TASKS]; // Array of active broadcast tasks (slots)
-static SemaphoreHandle_t s_task_mutex = NULL;   // Mutex to protect s_tasks array
-static int s_rr_index = 0;                      // Round-Robin Index to ensure fair broadcasting
+static SemaphoreHandle_t s_task_mutex = NULL;   // Mutex to protect s_tasks array in RTOS multi-thread environment
+static int s_rr_index = 0;                      // Round-Robin Index to ensure fair broadcasting across multiple active commands
 
 /* ========================================================
  * Helper functions to format and send low-level HCI commands
@@ -61,45 +64,51 @@ static void hci_cmd_send_ble_set_adv_data(uint8_t cmd_type, uint32_t delay_ms, u
     uint8_t raw_adv_data[31];
     uint8_t idx = 0;
     
-    raw_adv_data[idx++] = 2; raw_adv_data[idx++] = 0x01; raw_adv_data[idx++] = 0x06;
+    // --- Payload Structure: Standard BLE Flags ---
+    raw_adv_data[idx++] = 2; // Length: 2 bytes
+    raw_adv_data[idx++] = 0x01; // AD Type: Flags
+    raw_adv_data[idx++] = 0x06; // LE General Discoverable Mode | BR/EDR Not Supported
     
-    raw_adv_data[idx++] = 22; 
-    raw_adv_data[idx++] = 0xFF; 
-    raw_adv_data[idx++] = 0xFF;
-    raw_adv_data[idx++] = 0xFF;
+    // --- Payload Structure: Service Data (0x16) ---
+    raw_adv_data[idx++] = 20;   // Length: 20 bytes for the following payload
+    raw_adv_data[idx++] = 0x16; // AD Type: Service Data - 16-bit UUID
     
-    raw_adv_data[idx++] = 0x4C; // 'L'
-    raw_adv_data[idx++] = 0x44; // 'D'
+    // 2-byte UUID (Little-Endian)
+    raw_adv_data[idx++] = UUID1; 
+    raw_adv_data[idx++] = UUID2; 
+    
+    // 1-byte Command Type (e.g., 0x01 for PLAY)
     raw_adv_data[idx++] = cmd_type;
 
-    // Target Mask (8 bytes)
+    // 8-byte Target Mask (Specifies which receivers should execute the command)
     for(int i = 0; i < 8; i++) {
         raw_adv_data[idx++] = (uint8_t)((target_mask >> (i * 8)) & 0xFF);
     }
 
-    // Delay MS (4 bytes)
+    // 4-byte Remaining Delay in MS (Big-Endian format)
     raw_adv_data[idx++] = (delay_ms >> 24) & 0xFF;
     raw_adv_data[idx++] = (delay_ms >> 16) & 0xFF;
     raw_adv_data[idx++] = (delay_ms >> 8)  & 0xFF;
     raw_adv_data[idx++] = (delay_ms)       & 0xFF;
 
+    // Command-Specific Variable Payload (up to 4 bytes padding)
     uint8_t base_cmd = cmd_type & 0x0F;
-    if (base_cmd == 0x01) { // PLAY: 4 bytes
+    if (base_cmd == 0x01) { // PLAY: 4 bytes indicating LED preparation time
         raw_adv_data[idx++] = (prep_led_ms >> 24) & 0xFF;
         raw_adv_data[idx++] = (prep_led_ms >> 16) & 0xFF;
         raw_adv_data[idx++] = (prep_led_ms >> 8)  & 0xFF;
         raw_adv_data[idx++] = (prep_led_ms)       & 0xFF;
-    } else if (base_cmd == 0x05) { // TEST: 3 bytes + 1 byte pad
-        raw_adv_data[idx++] = data[0];
-        raw_adv_data[idx++] = data[1];
-        raw_adv_data[idx++] = data[2];
+    } else if (base_cmd == 0x05) { // TEST: 3 bytes for RGB values + 1 byte pad
+        raw_adv_data[idx++] = data[0]; // R
+        raw_adv_data[idx++] = data[1]; // G
+        raw_adv_data[idx++] = data[2]; // B
         raw_adv_data[idx++] = 0x00; 
-    } else if (base_cmd == 0x06) { // CANCEL: 1 byte + 3 bytes pad
+    } else if (base_cmd == 0x06) { // CANCEL: 1 byte for target slot + 3 bytes pad
         raw_adv_data[idx++] = data[0]; 
         raw_adv_data[idx++] = 0x00;
         raw_adv_data[idx++] = 0x00;
         raw_adv_data[idx++] = 0x00;
-    } else { // 4 bytes pad
+    } else { // Generic 4-byte pad for other commands
         raw_adv_data[idx++] = 0x00;
         raw_adv_data[idx++] = 0x00;
         raw_adv_data[idx++] = 0x00;
@@ -110,7 +119,7 @@ static void hci_cmd_send_ble_set_adv_data(uint8_t cmd_type, uint32_t delay_ms, u
     if (esp_vhci_host_check_send_available()) esp_vhci_host_send_packet(hci_cmd_buf, sz);
 }
 
-// Set basic advertising parameters
+// Set basic advertising parameters (Intervals, Channel Map)
 static void hci_cmd_send_ble_set_adv_param(void) {
     uint8_t peer_addr[6] = {0};
     uint16_t sz = make_cmd_ble_set_adv_param(hci_cmd_buf, 0x20, 0x20, 0x03, 0, 0, peer_addr, 0x07, 0);
@@ -137,11 +146,11 @@ static void hci_cmd_send_reset(void) {
 
 static void controller_rcv_pkt_ready(void) {}
 
-// Parse incoming packets (Used only during 'CHECK' scan mode to receive ACKs)
+// Parse incoming packets (Used only during 'CHECK' scan mode to receive status ACKs from receivers)
 static int host_rcv_pkt(uint8_t *data, uint16_t len) {
-    if(!is_checking) return ESP_OK; // Ignore packets if not in CHECK mode
+    if(!is_checking) return ESP_OK; // Ignore incoming packets if the sender is not actively polling
     
-    // Basic HCI LE Meta Event header check
+    // Validate HCI LE Meta Event header (0x04 = Event, 0x3E = LE Meta Event, 0x02 = LE Advertising Report)
     if(data[0] != 0x04 || data[1] != 0x3E || data[3] != 0x02) return ESP_OK;
 
     uint8_t num_reports = data[4];
@@ -155,21 +164,29 @@ static int host_rcv_pkt(uint8_t *data, uint16_t len) {
             uint8_t ad_len = adv_data[offset++];
             if(ad_len == 0) break;
             uint8_t ad_type = adv_data[offset++];
-            if(ad_type == 0xFF && (adv_data[offset] == 0xFF && adv_data[offset + 1] == 0xFF) && (adv_data[offset+2] == 0x4C && adv_data[offset + 3] == 0x44)) { 
+            
+            // Expected ACK Payload Structure:
+            // Type 0xFF (Manufacturer Specific), followed by 0xFFFF company ID, then our custom UUID
+            if(ad_type == 0xFF && (adv_data[offset] == 0xFF && adv_data[offset + 1] == 0xFF) && (adv_data[offset+2] == UUID1 && adv_data[offset + 3] == UUID2)) { 
+                
+                // Ensure it is an ACK command (0x07) and length matches expected ACK payload (14 bytes)
                 if (adv_data[offset+4] == 0x07 && ad_len == 14) {
                     uint8_t target_id = adv_data[offset+5];
                     uint8_t cmd_id    = adv_data[offset+6];
                     uint8_t cmd_type  = adv_data[offset+7];
+                    
+                    // Reconstruct 4-byte delay (Big-Endian)
                     uint32_t delay_ms = (adv_data[offset+8] << 24) | (adv_data[offset+9] << 16) | (adv_data[offset+10] << 8) | adv_data[offset+11];
                     uint8_t state = adv_data[offset+12];
                     
+                    // Output format expected by the Host PC Python script
                     printf("FOUND:%d,%d,%d,%lu,%d\n", target_id, cmd_id, cmd_type, delay_ms, state);
                 }
             }
             
-            offset += (ad_len - 1);
+            offset += (ad_len - 1); // Jump to next AD Structure block
         }
-        payload += (12 + data_len + 1);
+        payload += (12 + data_len + 1); // Jump to next report in this LE Meta Event
     }
     return ESP_OK;
 }
@@ -202,7 +219,7 @@ static void broadcast_scheduler_task(void *arg) {
     ESP_LOGD(TAG, "Broadcast Scheduler Started (20ms cycle)");
     
     while (1) {
-        // Pause broadcasting if system is currently scanning for ACKs
+        // Pause broadcasting if system is currently scanning for ACKs to avoid RF collision
         if (is_checking) {
             vTaskDelay(pdMS_TO_TICKS(20));
             continue;
@@ -214,18 +231,18 @@ static void broadcast_scheduler_task(void *arg) {
 
         xSemaphoreTake(s_task_mutex, portMAX_DELAY);
         
-        // Check and expire finished tasks
+        // Phase 1: Clean up expired tasks
         for (int i = 0; i < MAX_ACTIVE_TASKS; i++) {
             if (s_tasks[i].active) {
                 if (now_us >= s_tasks[i].end_time_us) {
-                    s_tasks[i].active = false; // Expire task
+                    s_tasks[i].active = false; // Expire task once its target time is reached
                 } else {
                     active_count++;
                 }
             }
         }
         
-        // Find the next task to broadcast using Round-Robin (to ensure fairness)
+        // Phase 2: Find the next task to broadcast using Round-Robin (to ensure fairness among multiple commands)
         if (active_count > 0) {
             for (int k = 0; k < MAX_ACTIVE_TASKS; k++) {
                 int idx = (s_rr_index + k) % MAX_ACTIVE_TASKS;
@@ -238,24 +255,26 @@ static void broadcast_scheduler_task(void *arg) {
         }
         xSemaphoreGive(s_task_mutex);
         
-        // Execute the chosen broadcast task
+        // Phase 3: Execute the chosen broadcast task
         if (task_index_to_run != -1) {
             active_task_t *t = &s_tasks[task_index_to_run];
             
+            // Recalculate remaining delay dynamically right before sending
             int32_t remain_ms = (int32_t)((t->end_time_us - now_us) / 1000);
             if (remain_ms < 0) remain_ms = 0;
 
             hci_cmd_send_ble_set_adv_data(t->config.cmd_type, remain_ms, t->config.prep_led_ms, t->config.target_mask, t->config.data);
+            
             // Non-RTOS delay (Busy-wait): Needed to let BT hardware digest the new ADV payload.
             // We MUST use esp_rom_delay_us() here because 500us is smaller than the FreeRTOS minimum tick resolution (typically 1ms).
             // Using vTaskDelay() would force a minimum 1ms yield, introducing jitter and slowing down the strict broadcast rhythm.
             esp_rom_delay_us(500); 
             
             hci_cmd_send_ble_adv_start();
-            vTaskDelay(pdMS_TO_TICKS(10)); // Advertise for 10ms
+            vTaskDelay(pdMS_TO_TICKS(10)); // Advertise the command for exactly 10ms
             hci_cmd_send_ble_adv_stop();
         }
-        vTaskDelay(pdMS_TO_TICKS(10)); // Cycle delay
+        vTaskDelay(pdMS_TO_TICKS(10)); // Base loop cycle delay to yield CPU
     }
 }
 
@@ -263,7 +282,7 @@ static void broadcast_scheduler_task(void *arg) {
 esp_err_t bt_sender_init(void) {
     if (is_initialized) return ESP_OK;
 
-    // NVS Initialization (Required for BT controller)
+    // NVS Initialization (Required for BT controller to store calibration data)
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -271,7 +290,7 @@ esp_err_t bt_sender_init(void) {
     }
     ESP_ERROR_CHECK(ret);
 
-    // Controller Initialization
+    // Controller Initialization directly at the HCI level (bypassing host stack)
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
     esp_bt_controller_init(&bt_cfg);
@@ -287,7 +306,7 @@ esp_err_t bt_sender_init(void) {
     hci_cmd_send_ble_set_adv_param();
     vTaskDelay(100 / portTICK_PERIOD_MS);
     
-    // Init Mutex and Scheduler Task
+    // Init Mutex and launch Scheduler Task
     s_task_mutex = xSemaphoreCreateMutex();
     for(int i=0; i<MAX_ACTIVE_TASKS; i++) s_tasks[i].active = false;
     xTaskCreate(broadcast_scheduler_task, "bt_scheduler", 4096, NULL, 10, NULL);
@@ -303,7 +322,7 @@ int bt_sender_add_task(const bt_sender_config_t *config) {
     int slot = -1;
     
     xSemaphoreTake(s_task_mutex, portMAX_DELAY);
-    // Find an empty slot
+    // Find an empty slot in the task array
     for (int i = 0; i < MAX_ACTIVE_TASKS; i++) {
         if (!s_tasks[i].active) {
             slot = i;
@@ -313,6 +332,7 @@ int bt_sender_add_task(const bt_sender_config_t *config) {
     
     if (slot != -1) {
         s_tasks[slot].config = *config;
+        // Lock in the absolute execution time
         s_tasks[slot].end_time_us = esp_timer_get_time() + ((uint64_t)config->delay_ms * 1000ULL); 
         s_tasks[slot].active = true;
         ESP_LOGD(TAG, "Task added to slot %d (Type 0x%02X)", slot, config->cmd_type);
@@ -330,10 +350,11 @@ void bt_sender_start_check(uint32_t duration_ms) {
 
     is_checking = true;
 
+    // Halt outgoing commands
     hci_cmd_send_ble_adv_stop();
     vTaskDelay(pdMS_TO_TICKS(20));
 
-    // Configure Scan Parameters (Interval 100ms, Window 100ms)
+    // Configure Scan Parameters (Interval 100ms, Window 100ms for continuous capture)
     uint8_t buf[128];
     make_cmd_ble_set_scan_params(buf, 0, 0x00A0, 0x00A0, 0, 0); 
     esp_vhci_host_send_packet(buf, 7 + 4); 
@@ -343,7 +364,7 @@ void bt_sender_start_check(uint32_t duration_ms) {
     make_cmd_ble_set_scan_enable(buf, 1, 0);
     esp_vhci_host_send_packet(buf, 2 + 4);
 
-    // Wait for the duration (collecting FOUND packets in ISR)
+    // Wait for the duration (collecting FOUND packets in ISR via host_rcv_pkt)
     vTaskDelay(pdMS_TO_TICKS(duration_ms));
 
     // Disable Scanning
@@ -351,7 +372,9 @@ void bt_sender_start_check(uint32_t duration_ms) {
     esp_vhci_host_send_packet(buf, 2 + 4);
 
     is_checking = false;
-    printf("CHECK_DONE\n"); // Signal PC Python script that scan is finished
+    
+    // Signal PC Python script that scan is finished via stdout
+    printf("CHECK_DONE\n"); 
 }
 
 // Remove/Cancel a specific command slot (used by CANCEL command)
