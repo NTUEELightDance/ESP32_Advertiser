@@ -7,7 +7,7 @@ Broadcasts BLE commands via PowerShell. Uses WinRT API to send Service Data (0x1
 Bypasses PowerShell 5.1 type-casting issues by invoking the .NET CLR directly for WinRT collections.
 
 .EXAMPLE
-.\LPS_advertiser.ps1 -CmdType 1 -TargetId -1
+.\LPS_advertiser.ps1 -CmdType 1 -TargetId -1 (or .\LPS_advertiser.ps1 -c 1 -t -1)
 .\LPS_advertiser.ps1 -CmdType 5 -TargetId 2 -R 255 -G 0 -B 0
 .\LPS_advertiser.ps1 -CmdType 6 -CancelId 3
 #>
@@ -19,10 +19,10 @@ param(
     [ValidateRange(1,9)]
     [int]$CmdType,
 
-    [Parameter(Mandatory=$false, HelpMessage="Target ID (0-63). Use -1 for global broadcast.")]
+    [Parameter(Mandatory=$true, HelpMessage="Target ID (0-63). Use -1 for global broadcast.")]
     [Alias('t')]
     [ValidateRange(-1,63)]
-    [int]$TargetId = -1,
+    [int]$TargetId,
 
     [Parameter(Mandatory=$false, HelpMessage="Command ID (0-15)")]
     [ValidateRange(0,15)]
