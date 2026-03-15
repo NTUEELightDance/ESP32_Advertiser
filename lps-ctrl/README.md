@@ -15,8 +15,9 @@ It is recommended to create a virtual environment in the `lps-ctrl` directory (w
 python3 -m venv venv
 # or try: python -m venv venv
 source venv/bin/activate
-# or try: .\venv\Scripts\Activate.ps1
-# or try: .\venv\Scripts\activate.bat
+# or try:
+# Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+# .\venv\Scripts\Activate.ps1
 python.exe -m pip install --upgrade pip
 pip install -e .
 python .\examples\lps_ctrl_ex.py
