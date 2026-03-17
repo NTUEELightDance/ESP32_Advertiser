@@ -24,7 +24,7 @@ dependencies = [
 ]
 ```
 
-To install the required environment, activate your virtual environment and run:
+It is recommended to create a virtual environment in the `lps-ctrl` directory (where `pyproject.toml` is located) and install the required packages.
 
 ```bash
 pip install -e .
@@ -35,7 +35,7 @@ pip install -e .
 Start the interactive terminal by running the script:
 
 ```bash
-python pc_adv_ex.py
+python examples/pc_adv_ex.py
 ```
 
 The script will guide you through a step-by-step prompt to assemble and broadcast your commands:
