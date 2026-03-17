@@ -105,40 +105,39 @@ The packet is constructed in `hci_cmd_send_ble_set_adv_data`. It uses Manufactur
 
 | Offset | Length | Value | Description |
 | --- | --- | --- | --- |
-| **0** | 3 | `0xFF, 0xFF, 0xFF` | Manufacturer ID |
-| **3** | 2 | `0x4C, 0x44` | unique code (LD) |
-| **5** | 1 | `cmd_type` | Command Type |
-| **6** | 8 | `target_mask` | 64-bit Target Mask |
-| **14** | 4 | `delay_us` | **Dynamic** Remaining Time (Big Endian) |
+| **0** | 3 | `AD type` + `UUID` | AD type + UUID (remember to change it to real one) |
+| **3** | 1 | `cmd_type` | Command Type |
+| **4** | 8 | `target_mask` | 64-bit Target Mask |
+| **12** | 4 | `delay_us` | **Dynamic** Remaining Time (Big Endian) |
 
 The remaining bytes: 
 * `PLAY`
 
 | Offset | Length | Value | Description |
 | --- | --- | --- | --- |
-| **18** | 4 | `prep_led_us` | Preparation Time (Big Endian) |
+| **16** | 4 | `prep_led_us` | Preparation Time (Big Endian) |
 
 * `TEST`
 
 | Offset | Length | Value | Description |
 | --- | --- | --- | --- |
-| **18** | 3 | `data[3]` | Extra Data (e.g., RGB) |
-| **21** | 1 | `0` | padding |
+| **16** | 3 | `data[3]` | Extra Data (e.g., RGB) |
+| **19** | 1 | `0` | padding |
 
 * `CANCEL`
 
 | Offset | Length | Value | Description |
 | --- | --- | --- | --- |
-| **18** | 1 | `cmd_id` | the cmd id that you want to cancel |
-| **19** | 3 | `0` | padding |
+| **16** | 1 | `cmd_id` | the cmd id that you want to cancel |
+| **17** | 3 | `0` | padding |
 
 * Other command
 
 | Offset | Length | Value | Description |
 | --- | --- | --- | --- |
-| **18** | 4 | `0` | padding |
+| **16** | 4 | `0` | padding |
 
-**Total Length**: 22 Bytes of Manufacturer Data.
+**Total Length**: 20 Bytes.
 
 ## Operating Principles
 
