@@ -45,6 +45,7 @@ static bool is_checking = false;        // Flag indicating if currently in CHECK
 typedef struct {
     bool active;                // Is this slot currently in use?
     int64_t end_time_us;        // Absolute timestamp when broadcasting should stop
+    int64_t prep_led_end_time_us; // Absolute timestamp when preparation LED should turn off (for PLAY commands)
     bt_sender_config_t config;  // The command configuration (cmd, delay, target, etc.)
 } active_task_t;
 
@@ -245,7 +246,10 @@ static void broadcast_scheduler_task(void *arg) {
             int32_t remain_ms = (int32_t)((t->end_time_us - now_us) / 1000);
             if (remain_ms < 0) remain_ms = 0;
 
-            hci_cmd_send_ble_set_adv_data(t->config.cmd_type, remain_ms, t->config.prep_led_ms, t->config.target_mask, t->config.data);
+            int32_t remain_prep_led_ms = (int32_t)((t->prep_led_end_time_us - now_us) / 1000);
+            if (remain_prep_led_ms < 0) remain_prep_led_ms = 0;
+
+            hci_cmd_send_ble_set_adv_data(t->config.cmd_type, remain_ms, remain_prep_led_ms, t->config.target_mask, t->config.data);
             // Non-RTOS delay (Busy-wait): Needed to let BT hardware digest the new ADV payload.
             // We MUST use esp_rom_delay_us() here because 500us is smaller than the FreeRTOS minimum tick resolution (typically 1ms).
             // Using vTaskDelay() would force a minimum 1ms yield, introducing jitter and slowing down the strict broadcast rhythm.
@@ -313,6 +317,7 @@ int bt_sender_add_task(const bt_sender_config_t *config) {
     
     if (slot != -1) {
         s_tasks[slot].config = *config;
+        s_tasks[slot].prep_led_end_time_us = esp_timer_get_time() + ((uint64_t)config->prep_led_ms * 1000ULL);
         s_tasks[slot].end_time_us = esp_timer_get_time() + ((uint64_t)config->delay_ms * 1000ULL); 
         s_tasks[slot].active = true;
         ESP_LOGD(TAG, "Task added to slot %d (Type 0x%02X)", slot, config->cmd_type);
