@@ -200,6 +200,7 @@ class ESP32BTSender:
                 "target_delay": device["target_delay"],
                 "state": device["state"]
             })
+        self.found_devices_buffer = []
         return {
             "from": "Host_PC",
             "topic": "check_report",
