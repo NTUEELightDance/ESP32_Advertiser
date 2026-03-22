@@ -21,6 +21,7 @@ typedef struct {
     uint8_t  cmd_type;
     uint32_t delay_ms;
     uint32_t prep_led_ms;
+    uint32_t target_time_ms;
     uint64_t target_mask;
     uint8_t data[3];
 } bt_sender_config_t;

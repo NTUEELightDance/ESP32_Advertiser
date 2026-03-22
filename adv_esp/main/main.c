@@ -36,16 +36,17 @@ void process_byte(uint8_t c, int64_t t_wake, int64_t t_read_done) {
         // End of line reached, parse the CSV format string
         packet_buf[packet_idx] = '\0';       
         int cmd_in = 0;
-        unsigned long delay_us = 0;
-        unsigned long prep_led_us = 0;
+        unsigned long delay_ms = 0;
+        unsigned long prep_led_ms = 0;
+        unsigned long target_time_ms = 0;
         unsigned long long target_mask = 0;
         int in_data[3];
 
-        int args = sscanf(packet_buf, "%d,%lu,%lu,%llx,%d,%d,%d", 
-                          &cmd_in, &delay_us, &prep_led_us, &target_mask, 
-                          &in_data[0], &in_data[1], &in_data[2]);
+        int args = sscanf(packet_buf, "%d,%lu,%lu,%llx,%d,%d,%d,%lu", 
+                          &cmd_in, &delay_ms, &prep_led_ms, &target_mask, 
+                          &in_data[0], &in_data[1], &in_data[2], &target_time_ms);
 
-        if (args == 7) {
+        if (args == 8) {
             // Reply ACK to PC script immediately
             char ack_msg[64];
             snprintf(ack_msg, sizeof(ack_msg), "ACK:OK\n");
@@ -54,8 +55,9 @@ void process_byte(uint8_t c, int64_t t_wake, int64_t t_read_done) {
             // Build and queue the Bluetooth broadcast task
             bt_sender_config_t burst_cfg = {
                 .cmd_type = (uint8_t)cmd_in,
-                .delay_ms = delay_us,
-                .prep_led_ms = prep_led_us,
+                .delay_ms = delay_ms,
+                .prep_led_ms = prep_led_ms,
+                .target_time_ms = target_time_ms,
                 .target_mask = (uint64_t)target_mask,
                 .data[0]=(uint8_t)in_data[0],
                 .data[1]=(uint8_t)in_data[1],

@@ -154,6 +154,7 @@ send_burst(cmd_input, delay_sec, prep_led_sec, target_ids, data)
 | **prep_led_sec** | `float` | Duration for the "Preparation LED" effect. **Must be > 1.0s**. |
 | **target_ids** | `list[int]` | List of Target IDs (e.g., `[1, 2]`). Use `[]` for **Broadcast All**. Use `[0]` for **Broadcast to error or unmounting ESP32**. |
 | **data** | `list[int]` | list of 3 integers `[d0, d1, d2]` for extra parameters. |
+| **target_time_sec** | `float` | The specific timeline position to jump to(in seconds). |
 
 **Command Mapping Table**
 
@@ -167,6 +168,7 @@ send_burst(cmd_input, delay_sec, prep_led_sec, target_ids, data)
 | **CANCEL** | `0x06` | Cancel a pending command. | `[cmd_id]` (Use the ID returned by send_burst). |
 | **UPLOAD** | `0x08` | Enter System Upload Mode (Trigger TCP client). | None |
 | **RESET** | `0x09` | System Reboot. | None |
+| **SEEK** | `0x0A` | Jump to a specific time and play. | None |
 * `CHECK`: using `trigger_check`
 
 #### Method: `trigger_check` & `get_latest_report`

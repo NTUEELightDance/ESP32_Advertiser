@@ -58,7 +58,7 @@ static int s_rr_index = 0;                      // Round-Robin Index to ensure f
  * ======================================================== */
 
 // Pack and send BLE advertising data
-static void hci_cmd_send_ble_set_adv_data(uint8_t cmd_type, uint32_t delay_ms, uint32_t prep_led_ms, uint64_t target_mask, const uint8_t *data) {
+static void hci_cmd_send_ble_set_adv_data(uint8_t cmd_type, uint32_t delay_ms, uint32_t prep_led_ms, uint64_t target_mask, const uint8_t *data, uint32_t target_time_ms) {
     uint8_t raw_adv_data[31];
     uint8_t idx = 0;
     
@@ -100,6 +100,11 @@ static void hci_cmd_send_ble_set_adv_data(uint8_t cmd_type, uint32_t delay_ms, u
         raw_adv_data[idx++] = 0x00;
         raw_adv_data[idx++] = 0x00;
         raw_adv_data[idx++] = 0x00;
+    } else if (base_cmd == 0x0A) { // SEEK: 4 byte target time (ms)
+        raw_adv_data[idx++] = (target_time_ms >> 24) & 0xFF;
+        raw_adv_data[idx++] = (target_time_ms >> 16) & 0xFF;
+        raw_adv_data[idx++] = (target_time_ms >> 8)  & 0xFF;
+        raw_adv_data[idx++] = (target_time_ms)       & 0xFF;
     } else { // 4 bytes pad
         raw_adv_data[idx++] = 0x00;
         raw_adv_data[idx++] = 0x00;
@@ -249,7 +254,7 @@ static void broadcast_scheduler_task(void *arg) {
             int32_t remain_prep_led_ms = (int32_t)((t->prep_led_end_time_us - now_us) / 1000);
             if (remain_prep_led_ms < 0) remain_prep_led_ms = 0;
 
-            hci_cmd_send_ble_set_adv_data(t->config.cmd_type, remain_ms, remain_prep_led_ms, t->config.target_mask, t->config.data);
+            hci_cmd_send_ble_set_adv_data(t->config.cmd_type, remain_ms, remain_prep_led_ms, t->config.target_mask, t->config.data, t->config.target_time_ms);
             // Non-RTOS delay (Busy-wait): Needed to let BT hardware digest the new ADV payload.
             // We MUST use esp_rom_delay_us() here because 500us is smaller than the FreeRTOS minimum tick resolution (typically 1ms).
             // Using vTaskDelay() would force a minimum 1ms yield, introducing jitter and slowing down the strict broadcast rhythm.

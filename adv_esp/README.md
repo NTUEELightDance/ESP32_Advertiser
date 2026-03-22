@@ -67,16 +67,17 @@ A dedicated FreeRTOS task `broadcast_scheduler_task` runs every **20ms**:
 Commands must be sent as a CSV string terminated by a newline `\n`.
 
 ```text
-cmd_in,delay_us,prep_led_us,target_mask,in_data[0],in_data[1],in_data[2]
+cmd_in,delay_us,prep_led_us,target_mask,in_data[0],in_data[1],in_data[2],target_time_ms
 ```
 
 | Parameter | Type | Description |
 | --- | --- | --- |
 | **cmd_in** | `int` | 4 bits Command_ID + 4 bits command type |
-| **delay_us** | `long` | Execution delay in microseconds. |
-| **prep_led_us** | `long` | Preparation LED duration. |
+| **delay_ms** | `long` | Execution delay in milliseconds. |
+| **prep_led_ms** | `long` | Preparation LED duration. |
 | **target_mask** | `hex` | 64-bit mask. |
 | **in_data[0-2]** | `int` | Payload data (R, G, B or Target ID for Cancel). |
+| **target_time_ms** | `long` | The specific timeline position for player to seek to. |
 
 #### Supported Command Types (Low 4 bits of `cmd_in`)
 
@@ -91,6 +92,7 @@ cmd_in,delay_us,prep_led_us,target_mask,in_data[0],in_data[1],in_data[2]
 | **CHECK** | `0x07` | Trigger Broadcast+Scan | None |
 | **UPLOAD** | `0x08` | Enter System Upload Mode. | None |
 | **RESET** | `0x09` | System Reboot. | None |
+| **SEEk** | `0x0A` | Jump to a specific time and play. | None |
 
 ### 2. Response Format (ESP32 -> PC)
 
@@ -131,6 +133,12 @@ The remaining bytes:
 | --- | --- | --- | --- |
 | **18** | 1 | `cmd_id` | the cmd id that you want to cancel |
 | **19** | 3 | `0` | padding |
+
+* `SEEK`
+
+| Offset | Length | Value | Description |
+| --- | --- | --- | --- |
+| **18** | 4 | `target_time_ms` | The specific timeline position to jump to (Big Endian) |
 
 * Other command
 

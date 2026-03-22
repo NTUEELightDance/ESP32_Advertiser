@@ -12,6 +12,7 @@ def main():
             response = sender.send_burst(cmd_input='STOP', delay_sec=9, target_ids=[1])
             response = sender.send_burst(cmd_input='TEST', delay_sec=10, target_ids=[1], data=[255,0,0])
             response = sender.send_burst(cmd_input='RESET', delay_sec=11, target_ids=[1])            
+            response = sender.send_burst(cmd_input='SEEK', delay_sec=12, target_time_sec=300.125, target_ids=[1])
             time.sleep(2)            
             report = sender.get_latest_report()
             print(json.dumps(report, indent=4, ensure_ascii=False))
